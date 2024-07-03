@@ -15,19 +15,31 @@
 <script setup>
 import { useRouter } from "vue-router";
 
-const isCheckedIn = ref(false);
 const router = useRouter();
 
+const getCurrentDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  let month = (now.getMonth() + 1).toString().padStart(2, "0");
+  let day = now.getDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isCheckedInToday = computed(() => {
+  const lastCheckInDate = localStorage.getItem("lastCheckInDate");
+  const currentDate = getCurrentDate();
+  return lastCheckInDate === currentDate;
+});
+
 const navigateToCheckIn = () => {
-  isCheckedIn.value = true;
   router.push("/checkin");
 };
 
 const handleCheckOut = () => {
-  if (isCheckedIn.value) {
+  if (isCheckedInToday.value) {
     router.push("/checkout");
   } else {
-    alert("Please checkin first.");
+    alert("Please check in first.");
   }
 };
 </script>

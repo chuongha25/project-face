@@ -61,14 +61,8 @@ const stopVideo = () => {
 const getCurrentDate = () => {
   const now = new Date();
   const year = now.getFullYear();
-  let month = (now.getMonth() + 1).toString();
-  if (month.length === 1) {
-    month = "0" + month;
-  }
-  let day = now.getDate().toString();
-  if (day.length === 1) {
-    day = "0" + day;
-  }
+  let month = (now.getMonth() + 1).toString().padStart(2, "0");
+  let day = now.getDate().toString().padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
@@ -85,20 +79,23 @@ const detectFace = async () => {
 };
 
 const saveCheckInDate = () => {
-  const lastCheckInDate = localStorage.getItem("lastCheckInDate");
   const currentDate = getCurrentDate();
-
-  if (lastCheckInDate === currentDate) {
-    alert("You have already checked in today. Only checkout is allowed.");
-    router.push("/");
-  } else {
-    localStorage.setItem("lastCheckInDate", currentDate);
-  }
+  localStorage.setItem("lastCheckInDate", currentDate);
 };
 
 const handleCheckIn = () => {
   if (faceDetectionInterval) {
     clearInterval(faceDetectionInterval);
+  }
+
+  const lastCheckInDate = localStorage.getItem("lastCheckInDate");
+  const currentDate = getCurrentDate();
+
+  if (lastCheckInDate === currentDate) {
+    alert("You have already checked in today. Only checkout is allowed.");
+    stopVideo();
+    router.push("/");
+    return;
   }
 
   if (navigator.geolocation) {
@@ -124,7 +121,7 @@ const handleCheckIn = () => {
             alert("No face detected. Please try again.");
           }
           clearInterval(faceDetectionInterval);
-        }, 3000); // Wait 3 seconds to allow face detection
+        }, 3000);
       },
       (err) => {
         alert("Error getting location: " + err.message);

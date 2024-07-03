@@ -7,7 +7,7 @@
       <video ref="video" width="420" height="360" autoplay></video>
     </div>
     <div class="w-full flex flex-row justify-evenly mt-10">
-      <el-button type="primary" @click="handleCheckIn"
+      <el-button type="primary" @click="handleCheckOut"
         >Start Check Out</el-button
       >
     </div>
@@ -70,7 +70,7 @@ const detectFace = async () => {
   }
 };
 
-const handleCheckIn = () => {
+const handleCheckOut = () => {
   if (faceDetectionInterval) {
     clearInterval(faceDetectionInterval);
   }
