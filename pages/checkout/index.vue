@@ -1,106 +1,66 @@
 <template>
-  <div class="container mx-auto h-full">
-    <h1 class="text-center text-xl font-semibold my-10">
-      Face Recognition Check Out
-    </h1>
-    <div class="w-full">
-      <video ref="video" width="420" height="360" autoplay></video>
-    </div>
-    <div class="w-full flex flex-row justify-evenly mt-10">
-      <el-button type="primary" @click="handleCheckOut"
-        >Start Check Out</el-button
-      >
-    </div>
+  <div class="register-page">
+    <el-card
+      style="width: 500px"
+      class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+    >
+      <h1 class="text-center text-xl font-semibold my-10">Check Out User</h1>
+      <div class="w-full">
+        <video ref="video" width="420" height="360" autoplay></video>
+      </div>
+      <div class="w-full flex flex-row justify-evenly mt-10">
+        <el-button type="primary" @click="handleCheckOut">Check Out</el-button>
+      </div>
+    </el-card>
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted } from "vue";
-import * as faceapi from "face-api.js";
-import { useRouter } from "vue-router";
+<script setup lang="ts">
+import type { UploadUserFile } from "element-plus";
+import axios from "axios";
+import { ElMessage } from "element-plus";
 
-const video = ref(null);
-const isFaceDetected = ref(false);
-const position = ref(null);
-let faceDetectionInterval = null;
-const router = useRouter();
+const video: Ref<HTMLVideoElement | null> = ref(null);
 
-let isVideoActive = false;
-let videoStream = null;
+interface Form {
+  latitude: number;
+  longitude: number;
+  file?: UploadUserFile;
+  attendance_type: string;
+}
 
-const loadModels = async () => {
-  await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
-  await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
-  await faceapi.nets.faceRecognitionNet.loadFromUri("/models");
-};
+const form = reactive<Form>({
+  latitude: 16.023606906649366,
+  longitude: 108.2260408955065,
+  file: undefined,
+  attendance_type: "CHECK_OUT",
+});
 
-const startVideo = () => {
-  if (!isVideoActive) {
+const startVideo = async () => {
+  if (navigator.mediaDevices.getUserMedia) {
     navigator.mediaDevices
       .getUserMedia({ video: {} })
       .then((stream) => {
-        videoStream = stream;
-        video.value.srcObject = stream;
-        isVideoActive = true;
+        if (video.value) {
+          video.value.srcObject = stream;
+        }
       })
       .catch((err) => {
-        console.error("Error accessing video stream: ", err);
+        console.error("Error accessing the webcam:", err);
       });
   }
 };
 
-const stopVideo = () => {
-  if (isVideoActive && videoStream) {
-    videoStream.getTracks().forEach((track) => track.stop());
-    video.value.srcObject = null;
-    isVideoActive = false;
-    videoStream = null;
-  }
-};
-
-const detectFace = async () => {
-  const detections = await faceapi.detectSingleFace(
-    video.value,
-    new faceapi.TinyFaceDetectorOptions()
-  );
-  if (detections) {
-    isFaceDetected.value = true;
-  } else {
-    isFaceDetected.value = false;
-  }
-};
-
-const handleCheckOut = () => {
-  if (faceDetectionInterval) {
-    clearInterval(faceDetectionInterval);
-  }
-
+const getCurrentLocation = () => {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        position.value = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        };
-
-        await detectFace();
-
-        setTimeout(() => {
-          if (isFaceDetected.value) {
-            alert("Check-out successful!");
-            console.log(
-              `Latitude: ${position.value.latitude}, Longitude: ${position.value.longitude}`
-            );
-            router.push("/");
-            stopVideo();
-          } else {
-            alert("No face detected. Please try again.");
-          }
-          clearInterval(faceDetectionInterval);
-        }, 3000); // Wait 3 seconds to allow face detection
+      (position) => {
+        form.latitude = position.coords.latitude;
+        form.longitude = position.coords.longitude;
+        console.log(position);
       },
-      (err) => {
-        alert("Error getting location: " + err.message);
+      (error) => {
+        alert("Error getting location: " + error.message);
       }
     );
   } else {
@@ -108,13 +68,99 @@ const handleCheckOut = () => {
   }
 };
 
-onMounted(async () => {
-  await loadModels();
+// getCurrentLocation();
+
+const base64toBlob = (base64Data: string): Blob => {
+  const byteString = atob(base64Data.split(",")[1]);
+  const mimeString = base64Data.split(",")[0].split(":")[1].split(";")[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+};
+
+const handleCheckOut = async () => {
+  // getCurrentLocation();
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  if (!video.value) {
+    console.error("Video element is not yet available.");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = video.value?.videoWidth ?? 0;
+  canvas.height = video.value?.videoHeight ?? 0;
+  const context = canvas.getContext("2d");
+  if (context && video.value?.srcObject instanceof MediaStream) {
+    context.drawImage(video.value, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL("image/png");
+
+    // Convert base64 to Blob
+    const imageBlob = base64toBlob(imageData);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", imageBlob, "image.png");
+      formData.append("attendance_type", form.attendance_type);
+
+      const res = await axios.post(
+        "http://192.168.1.172:8000/api/attendance-managements",
+        formData,
+        {
+          params: {
+            latitude: form.latitude,
+            longitude: form.longitude,
+          },
+        }
+      );
+
+      const userInfo = JSON.stringify(res.data);
+      const now = new Date();
+      const endOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999
+      );
+      const expires = endOfDay.toUTCString();
+      document.cookie = `user=${userInfo}; expires=${expires}; path=/`;
+
+      const tracks = video?.value?.srcObject.getTracks();
+      tracks.forEach((track) => track.stop());
+
+      ElMessage({
+        message: "Congrats, you have successfully checked out!",
+        type: "success",
+      });
+
+      navigateTo("/");
+    } catch (error) {
+      console.error("Error calling face recognition API:", error);
+    }
+  } else {
+    console.error("Canvas context or video dimensions are not available.");
+  }
+};
+
+onMounted(() => {
+  getCurrentLocation();
   startVideo();
 });
 </script>
 
 <style scoped>
+.register-page {
+  background-image: linear-gradient(to top, #00c6fb 0%, #005bea 100%);
+  height: 100vh;
+  position: relative;
+}
 video,
 canvas {
   display: block;
